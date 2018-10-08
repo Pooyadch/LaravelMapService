@@ -24,7 +24,7 @@ class LaravelMapSearchAddressController
      */
     public function searchAddress()
     {
-        if (Cache::get('cedarStatusCode') == 200) {
+        if (Cache::get('cedarStatusCode') == 200 || Cache::get('cedarStatusCode') == null) {
             list($responseCedarMaps, $cedarMapStatus) = $this->cedarMapSearchAddress();
             if (!($cedarMapStatus == 'OK')) {
                 $responseMapBox = $this->mapBoxSearchAddress();
@@ -79,24 +79,15 @@ class LaravelMapSearchAddressController
     public function cedarMapSearchAddressRequest()
     {
         try {
+//            dd(123);
             $client = new Client();
-            $accessTokenCedarMaps = "89640b6dd24953f4df81742e2bd0dffe3070c0b5";
-            $searchInput = Input::get('keyword');
-            $searchLimit = Input::get('Limit');
-            if (is_null($searchLimit)) {
-                $searchLimit = 5;
-            }
-            $getUrlCedarMaps = "https://api.cedarmaps.com/v1/geocode/cedarmaps.streets/"
-                . $searchInput
-                . "?type=locality&limit="
-                . $searchLimit
-                . "&access_token=$accessTokenCedarMaps";
+            $getUrlCedarMaps = $this->cedarMapSearchAddressRequestJson();
             $responseCedarMaps = $client->get($getUrlCedarMaps);
             $responseStatusCode = $responseCedarMaps->getStatusCode();
             Cache::put('cedarStatusCode', $responseStatusCode, 1);
+            Cache::put('cedarStatusCode', 500, 1);
             $responseCedarMaps = (json_decode($responseCedarMaps->getBody(), true));
-            $cedarMapStatus = $responseCedarMaps['status'];
-            return array($responseCedarMaps, $cedarMapStatus);
+            return $responseCedarMaps;
         } catch (Exception $e) {
             Cache::put('cedarStatusCode', 500, 1);
             $responseCedarMaps = [];
@@ -113,6 +104,8 @@ class LaravelMapSearchAddressController
         $lastResponse = [];
         foreach ($responseCedarMaps['results'] as $responseCedarMap) {
             $coordinates = $responseCedarMap['location']['center'];
+            $latitude = floatval(explode(",",$coordinates)[0]);
+            $longitude = floatval(explode(",",$coordinates)[0]);
             if (array_key_exists(0, $responseCedarMap['components']['districts'])) {
                 $districts = $responseCedarMap['components']['districts'][0];
             } else {
@@ -127,6 +120,8 @@ class LaravelMapSearchAddressController
                 'keyword' => $text,
                 'address' => $address,
                 'coordinates' => $coordinates,
+                'latitude' => $latitude,
+                'longitude' => $longitude
             ];
             array_push($lastResponse, $response);
         }
@@ -143,12 +138,21 @@ class LaravelMapSearchAddressController
             $accessTokenMapBox = "pk.eyJ1IjoicG9veWFkY2giLCJhIjoiY2pqZHlpNzU5NDlpbTNydW95bTJhamd3MSJ9.HBVEz296uNyAu508i4QHoQ";
             $searchInput = Input::get('keyword');
             $searchLimit = Input::get('Limit');
+            $searchLat = Input::get('lat');
+            $searchLon = Input::get('lon');
             if (is_null($searchLimit)) {
                 $searchLimit = 5;
             }
+            if (is_null($searchLat)) {
+                $searchLat = 35.70939;
+                $searchLon = 51.37743;
+            }
             $getUrlMapBox = "https://api.mapbox.com/geocoding/v5/mapbox.places/"
-                . $searchInput . ".json?limit=" . $searchLimit
-                . "&access_token=" . $accessTokenMapBox;
+                . $searchInput
+                . ".json?country=IR&proximity=$searchLon,$searchLat&limit="
+                . $searchLimit
+                . "&access_token="
+                . $accessTokenMapBox;
             $responseMapBox = $client->get($getUrlMapBox);
             $responseMapBoxes = (json_decode($responseMapBox->getBody(), true));
             return $responseMapBoxes;
@@ -174,12 +178,16 @@ class LaravelMapSearchAddressController
         $lastResponse = [];
         foreach ($responseMapBoxes['features'] as $responseMap) {
             $coordinates = implode(',', $responseMap['center']);
+            $latitude = $responseMap['center'][0];
+            $longitude = $responseMap['center'][1];
             $address = $responseMap['place_name'];
             $text = $responseMap['text'];
             $response = [
                 'keyword' => $text,
                 'address' => $address,
                 'coordinates' => $coordinates,
+                'latitude' => $latitude,
+                'longitude' => $longitude
             ];
             array_push($lastResponse, $response);
         }
@@ -188,6 +196,31 @@ class LaravelMapSearchAddressController
         $response->setStatus(true);
         $response->setData(collect($lastResponse));
         return $response;
+    }
+
+    /**
+     * @return string
+     */
+    public function cedarMapSearchAddressRequestJson()
+    {
+        $accessTokenCedarMaps = "89640b6dd24953f4df81742e2bd0dffe3070c0b5";
+        $searchInput = Input::get('keyword');
+        $searchLimit = Input::get('Limit');
+        $searchLat = Input::get('lat');
+        $searchLon = Input::get('lon');
+        if (is_null($searchLimit)) {
+            $searchLimit = 5;
+        }
+        if (is_null($searchLat)) {
+            $searchLat = 35.70939;
+            $searchLon = 51.37743;
+        }
+        $getUrlCedarMaps = "https://api.cedarmaps.com/v1/geocode/cedarmaps.streets/"
+            . $searchInput
+            . "?location=$searchLat,$searchLon&distance=25&limit="
+            . $searchLimit
+            . "&access_token=$accessTokenCedarMaps";
+        return $getUrlCedarMaps;
     }
 
 }
