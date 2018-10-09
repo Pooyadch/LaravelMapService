@@ -16,7 +16,7 @@ use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Input;
 
-class LaravelMapSearchAddressController
+class LaravelMapSearchAddressController2
 {
 
     /**
@@ -24,18 +24,40 @@ class LaravelMapSearchAddressController
      */
     public function searchAddress()
     {
-        if (Cache::get('openStreetStatusCode') == 200 || !Cache::has('openStreetStatusCode')) {
-            list ($responseOpenStreet, $openStreetStatus) = $this->openStreetSearchAddress();
-            if (!($openStreetStatus == 'OK')) {
-                $responseCedarMaps = $this->cedarMapSearchAddress();
-                return SmartResponse::response($responseCedarMaps);
-            } else {
+        if (Cache::get('cedarStatusCode') == 200 || !Cache::has('cedarStatusCode')) {
+            list($responseCedarMaps, $cedarMapStatus) = $this->cedarMapSearchAddress();
+            if (!($cedarMapStatus == 'OK')) {
+                $responseOpenStreet = $this->openStreetSearchAddress();
                 return SmartResponse::response($responseOpenStreet);
+            } else {
+                $response = new ResponseModel();
+                $response->setMessage('ok');
+                $response->setStatus(true);
+                $response->setData(collect($responseCedarMaps));
+                return SmartResponse::response($response);
             }
         } else {
-            $responseCedarMaps = $this->cedarMapSearchAddress();
-            return SmartResponse::response($responseCedarMaps);
+            $responseOpenStreet = $this->openStreetSearchAddress();
+            return SmartResponse::response($responseOpenStreet);
 
+        }
+
+        Cache::put('cedarStatusCode', 500, 1);
+        if (Cache::get('cedarStatusCode') == 200 || !Cache::has('cedarStatusCode')) {
+            list($responseCedarMaps, $cedarMapStatus) = $this->cedarMapSearchAddress();
+            if (!($cedarMapStatus == 'OK')) {
+                $responseOpenStreet = $this->openStreetSearchAddress();
+                return SmartResponse::response($responseOpenStreet);
+            } else {
+                $response = new ResponseModel();
+                $response->setMessage('ok');
+                $response->setStatus(true);
+                $response->setData(collect($responseCedarMaps));
+                return SmartResponse::response($response);
+            }
+        } else {
+            $responseOpenStreet = $this->openStreetSearchAddress();
+            return SmartResponse::response($responseOpenStreet);
         }
     }
 
@@ -46,29 +68,18 @@ class LaravelMapSearchAddressController
     {
         $responseCedarMaps = $this->cedarMapSearchAddressRequest();
         $lastResponse = [];
+        $cedarMapStatus = [];
         if (!array_key_exists("status", $responseCedarMaps)) {
-            $response = new ResponseModel();
-            $response->setMessage('no response');
-            $response->setStatus(false);
-            $response->setData(collect($responseCedarMaps));
-            return $response;
+            return [$lastResponse, $cedarMapStatus];
         }
         if ($responseCedarMaps['status'] !== 'OK') {
-            $response = new ResponseModel();
-            $response->setMessage('no response');
-            $response->setStatus(false);
-            $response->setData(collect($responseCedarMaps));
-            return $response;
+            return [$lastResponse, $cedarMapStatus];
         }
         if ($responseCedarMaps['status'] == 'OK') {
+            $cedarMapStatus = $responseCedarMaps['status'];
             $lastResponse = $this->cedarMapSearchAddressResponse($responseCedarMaps);
-
         }
-        $response = new ResponseModel();
-        $response->setMessage('no response');
-        $response->setStatus(false);
-        $response->setData(collect($lastResponse));
-        return $response;
+        return [$lastResponse, $cedarMapStatus];
     }
 
     /**
@@ -77,16 +88,8 @@ class LaravelMapSearchAddressController
     public function openStreetSearchAddress()
     {
         $responseOpenStreet = $this->openStreetSearchAddressRequest();
-        $lastResponse = [];
-        $openStreetStatus = [];
-
-        if (isset($responseOpenStreet[0]['place_id'])) {
-            $lastResponse = $this->openStreetSearchAddressResponse($responseOpenStreet);
-            $openStreetStatus = 'OK';
-            return [$lastResponse, $openStreetStatus];
-        }
-        return [$lastResponse, $openStreetStatus];
-
+        $response = $this->openStreetSearchAddressResponse($responseOpenStreet);
+        return $response;
     }
 
     /**
@@ -99,11 +102,11 @@ class LaravelMapSearchAddressController
             $getUrlCedarMaps = $this->cedarMapSearchAddressRequestJson();
             $responseCedarMaps = $client->get($getUrlCedarMaps);
             $responseStatusCode = $responseCedarMaps->getStatusCode();
-            Cache::put('openStreetStatusCode', $responseStatusCode, 1);
+            Cache::put('cedarStatusCode', $responseStatusCode, 1);
             $responseCedarMaps = (json_decode($responseCedarMaps->getBody(), true));
             return $responseCedarMaps;
         } catch (Exception $e) {
-            Cache::put('openStreetStatusCode', 500, 1);
+            Cache::put('cedarStatusCode', 500, 1);
             $responseCedarMaps = [];
             return $responseCedarMaps;
         }
@@ -152,11 +155,9 @@ class LaravelMapSearchAddressController
             $getUrlOpenStreet = $this->openStreetSearchAddressRequestJson();
             $responseOpenStreet = $client->get($getUrlOpenStreet);
             $responseStatusCode = $responseOpenStreet->getStatusCode();
-            Cache::put('cedarStatusCode', $responseStatusCode, 1);
             $responseOpenStreet = (json_decode($responseOpenStreet->getBody(), true));
             return $responseOpenStreet;
         } catch (Exception $e) {
-            Cache::put('cedarStatusCode', 500, 1);
             $exceptionResponse = ['error_message' => $e->getMessage()];
             return $exceptionResponse;
         }
