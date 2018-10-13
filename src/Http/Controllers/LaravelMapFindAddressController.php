@@ -29,19 +29,22 @@ class LaravelMapFindAddressController
      */
     public function FindAddressLastResponse()
     {
-        if (Cache::get('cedarStatusCode') == 200) {
-            $lastResponseCedarMaps = $this->cedarMapFindAddress();
-            if ($lastResponseCedarMaps == null) {
-                $lastResponseMapBox = $this->mapBoxFindAddress();
-                $lastResponse = ['address' => $lastResponseMapBox];
+        if (Cache::get('openStreetStatusCode') == 200 || !Cache::has('openStreetStatusCode')) {
+            list ($responseOpenStreet, $openStreetStatus) = $this->openStreetFindAddress();
+            if (!($openStreetStatus == 'OK')) {
+                $responseCedarMaps = $this->cedarMapFindAddress();
+                $lastResponse = ["address" => $responseCedarMaps];
+                return $lastResponse;
             } else {
-                $lastResponse = ['address' => $lastResponseCedarMaps];
+                $lastResponse = ["address" => $responseOpenStreet];
+                return $lastResponse;
             }
         } else {
-            $lastResponseMapBox = $this->mapBoxFindAddress();
-            $lastResponse = ['address' => $lastResponseMapBox];
+            $responseCedarMaps = $this->cedarMapFindAddress();
+            $lastResponse = ["address" => $responseCedarMaps];
+            return $lastResponse;
+
         }
-        return $lastResponse;
     }
 
 
@@ -93,21 +96,27 @@ class LaravelMapFindAddressController
         }
     }
 
-    public function mapBoxFindAddress()
+    public function openStreetFindAddress()
     {
         try {
             $client = new Client();
-            $accessTokenMapBox = "pk.eyJ1IjoicG9veWFkY2giLCJhIjoiY2pqZHlpNzU5NDlpbTNydW95bTJhamd3MSJ9.HBVEz296uNyAu508i4QHoQ";
-            $getUrlMapBox = "https://api.mapbox.com/geocoding/v5/mapbox.places/"
-                . Input::get('lon') . "," . Input::get('lat')
-                . ".json" . "?limit=1&access_token=" . $accessTokenMapBox;
-            $responseMapBox = $client->get($getUrlMapBox);
-            $responseMapBox = (json_decode($responseMapBox->getBody(), true));
-            $lastResponseMapBox = $responseMapBox['features'][0]['place_name'];
-            return $lastResponseMapBox;
+            $getUrlOpenStreet = "https://nominatim.openstreetmap.org/reverse?format=json&lat="
+                . Input::get('lat') . "&lon=" . Input::get('lon')
+                . "&zoom=18&addressdetails=1&accept-language=fa";
+            $responseOpenStreet = $client->get($getUrlOpenStreet);
+            $responseStatusCode = $responseOpenStreet->getStatusCode();
+            $responseOpenStreet = (json_decode($responseOpenStreet->getBody(), true));
+            if (isset($responseOpenStreet['display_name'])) {
+                Cache::put('openStreetStatusCode', $responseStatusCode, 1);
+                $openStreetStatus = 'OK';
+                $lastResponseOpenStreet = $responseOpenStreet['display_name'];
+                return [$lastResponseOpenStreet, $openStreetStatus];
+            }
+            return [$lastResponseOpenStreet = null, $openStreetStatus = null];
 
         } catch (Exception $e) {
-            return $e->getMessage();
+            Cache::put('openStreetStatusCode', 500, 1);
+            return [$lastResponseOpenStreet = null, $openStreetStatus = null];
         }
     }
 
