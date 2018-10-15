@@ -96,6 +96,9 @@ class LaravelMapFindAddressController
         }
     }
 
+    /**
+     * @return array
+     */
     public function openStreetFindAddress()
     {
         try {
@@ -103,13 +106,11 @@ class LaravelMapFindAddressController
             $getUrlOpenStreet = "https://nominatim.openstreetmap.org/reverse?format=json&lat="
                 . Input::get('lat') . "&lon=" . Input::get('lon')
                 . "&zoom=18&addressdetails=1&accept-language=fa";
-            $responseOpenStreet = $client->get($getUrlOpenStreet);
-            $responseStatusCode = $responseOpenStreet->getStatusCode();
-            $responseOpenStreet = (json_decode($responseOpenStreet->getBody(), true));
-            if (isset($responseOpenStreet['display_name'])) {
-                Cache::put('openStreetStatusCode', $responseStatusCode, 1);
-                $openStreetStatus = 'OK';
-                $lastResponseOpenStreet = $responseOpenStreet['display_name'];
+            $responseOpenStreets = $client->get($getUrlOpenStreet);
+            $responseStatusCode = $responseOpenStreets->getStatusCode();
+            $responseOpenStreets = (json_decode($responseOpenStreets->getBody(), true));
+            if (isset($responseOpenStreets['display_name'])) {
+                list($openStreetStatus, $lastResponseOpenStreet) = $this->openStreetFindAddressResponse($responseStatusCode, $responseOpenStreets);
                 return [$lastResponseOpenStreet, $openStreetStatus];
             }
             return [$lastResponseOpenStreet = null, $openStreetStatus = null];
@@ -118,6 +119,27 @@ class LaravelMapFindAddressController
             Cache::put('openStreetStatusCode', 500, 1);
             return [$lastResponseOpenStreet = null, $openStreetStatus = null];
         }
+    }
+
+    /**
+     * @param $responseStatusCode
+     * @param $responseOpenStreets
+     * @return array
+     */
+    public function openStreetFindAddressResponse($responseStatusCode, $responseOpenStreets)
+    {
+        Cache::put('openStreetStatusCode', $responseStatusCode, 1);
+        $openStreetStatus = 'OK';
+        $lastResponseOpenStreet = null;
+        $responseOpenStreets = $responseOpenStreets['address'];
+        $offsetKey = 'city';
+        $n = array_keys($responseOpenStreets);
+        $count = array_search($offsetKey, $n);
+        $responseOpenStreets = array_slice($responseOpenStreets, 0, $count + 1, true);
+        foreach ($responseOpenStreets as $responseOpenStreet) {
+            $lastResponseOpenStreet = $lastResponseOpenStreet . "," . $responseOpenStreet;
+        }
+        return array($openStreetStatus, $lastResponseOpenStreet);
     }
 
 
