@@ -81,8 +81,7 @@ class LaravelMapSearchAddressController
         $openStreetStatus = [];
 
         if (isset($responseOpenStreet[0]['place_id'])) {
-            $lastResponse = $this->openStreetSearchAddressResponse($responseOpenStreet);
-            $openStreetStatus = 'OK';
+            list($lastResponse,$openStreetStatus) = $this->openStreetSearchAddressResponse($responseOpenStreet);
             return [$lastResponse, $openStreetStatus];
         }
         return [$lastResponse, $openStreetStatus];
@@ -173,14 +172,16 @@ class LaravelMapSearchAddressController
             $response->setMessage('no response');
             $response->setStatus(false);
             $response->setData(collect($responseOpenStreet));
-            return $response;
+            $openStreetStatus = 'NOT OK';
+            return [$response,$openStreetStatus];
         }
         if (!array_key_exists("place_id", $responseOpenStreet[0])){
             $response = new ResponseModel();
             $response->setMessage('not ok');
             $response->setStatus(false);
             $response->setData(collect($responseOpenStreet));
-            return $response;
+            $openStreetStatus = 'NOT OK';
+            return [$response,$openStreetStatus];
         }
 
         $lastResponse = [];
@@ -202,7 +203,8 @@ class LaravelMapSearchAddressController
         $response->setMessage('ok');
         $response->setStatus(true);
         $response->setData(collect($lastResponse));
-        return $response;
+        $openStreetStatus = 'OK';
+        return [$response,$openStreetStatus];
     }
 
     /**
