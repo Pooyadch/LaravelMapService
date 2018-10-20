@@ -65,8 +65,8 @@ class LaravelMapSearchAddressController
 
         }
         $response = new ResponseModel();
-        $response->setMessage('no response');
-        $response->setStatus(false);
+        $response->setMessage('ok');
+        $response->setStatus(true);
         $response->setData(collect($lastResponse));
         return $response;
     }
